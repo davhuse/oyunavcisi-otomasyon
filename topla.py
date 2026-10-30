@@ -49,7 +49,8 @@ def steam():
         if not d or not uygun_mu(d) or not d.get("price_overview"):
             continue
         p = d["price_overview"]
-        out.append(oyun(d["name"], p["final"] / 100, p["initial"] / 100, d.get("header_image", ""),
+        out.append(oyun(d["name"], p["final"] / 100, p["initial"] / 100, [f"https://cdn.akamai.steamstatic.com/steam/apps/{i}/library_600x900_2x.jpg",
+                         f"https://cdn.akamai.steamstatic.com/steam/apps/{i}/library_600x900.jpg", d.get("header_image", "")],
                         f"https://store.steampowered.com/app/{i}/"))
         time.sleep(0.3)  # Steam'i yormamak için
     return {"market": "Steam", "tema": "oyun", "baslik": "Özel indirimler", "gecerlilik": "Steam mağazası",
@@ -65,7 +66,7 @@ def epic():
         if not teklif or fiyat.get("discountPrice", -1) != 0:  # yalnızca şu an gerçekten 0 TL olanlar
             continue
         eski = fiyat.get("originalPrice", 0) / 100
-        gorsel = next((im["url"] for im in e.get("keyImages", []) if im.get("type") in ("OfferImageWide", "Thumbnail")), "")
+        gorsel = [im["url"] for tip in ("OfferImageTall", "OfferImageWide", "Thumbnail") for im in e.get("keyImages", []) if im.get("type") == tip]
         slug = (e.get("catalogNs", {}).get("mappings") or [{}])[0].get("pageSlug") or e.get("urlSlug") or e.get("productSlug", "")
         link = f"https://store.epicgames.com/tr/p/{slug}" if slug else ""
         if not link:
@@ -92,9 +93,15 @@ if __name__ == "__main__":
         os.makedirs(f"gorseller/{k}", exist_ok=True)
         for i, o in enumerate(iyi, 1):
             try:
-                r = al(o.pop("gorsel_url"))
-                if not r.headers.get("content-type", "").startswith("image"):
-                    raise RuntimeError("görsel değil")
+                for url in filter(None, o.pop("gorsel_url")):  # en yüksek çözünürlüklü dikey görselden başla, olmazsa sıradakine düş
+                    try:
+                        r = al(url)
+                    except RuntimeError:
+                        continue
+                    if r.headers.get("content-type", "").startswith("image"):
+                        break
+                else:
+                    raise RuntimeError("görsel yok")
                 yol = f"gorseller/{k}/{i}.img"
                 open(yol, "wb").write(r.content)
                 o["gorsel"] = yol

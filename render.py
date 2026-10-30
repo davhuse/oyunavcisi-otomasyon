@@ -23,6 +23,23 @@ def b64(yol):
     return base64.b64encode(open(yol, "rb").read()).decode()
 
 
+def yatay(u):
+    """Yatay (en>boy) görsel dikey kareye cover ile büyütülünce bulanıklaşıyor; bunlar bulanık zemin + net ortada gösterilir."""
+    if "_yatay" not in u:
+        oran = pg.evaluate("s=>new Promise(r=>{const i=new Image();i.onload=()=>r(i.naturalWidth/i.naturalHeight);i.src=s})",
+                           "data:image/png;base64," + b64(u["gorsel"]))
+        u["_yatay"] = oran > 1.05
+    return u["_yatay"]
+
+
+def zemin(u, sinif, tam=False):
+    """Oyun görseli katmanı: dikeyse tam dolu, yataysa bulanık zemin + contain."""
+    src = f'data:image/png;base64,{b64(u["gorsel"])}'
+    if tam or yatay(u):
+        return f'<img class="{sinif} bz" src="{src}"><img class="{sinif} ort" src="{src}">'
+    return f'<img class="{sinif}" src="{src}">'
+
+
 def logo(sinif):
     if not os.path.exists("logo.png"):
         return ""
@@ -44,6 +61,8 @@ body{{position:relative;overflow:hidden;font-family:'Inter',sans-serif;backgroun
 .dots{{position:absolute;left:0;right:0;bottom:22px;text-align:center;z-index:5}}
 .dots i{{display:inline-block;width:12px;height:12px;border-radius:50%;margin:0 5px;background:#ffffff55}}
 .dots i.on{{width:34px;border-radius:8px;background:{HI}}}
+.bz{{filter:blur(40px) brightness(.5);transform:scale(1.3)}}
+.ort{{object-fit:contain!important}}
 .pill{{display:inline-block;background:{AC};font-weight:800;font-size:40px;letter-spacing:4px;padding:8px 30px;border-radius:60px;box-shadow:0 6px 20px #0008}}
 """
 
@@ -77,7 +96,7 @@ def tekli_govde(u, sayfa_no=None, toplam=None):
 .es{font-size:40px;color:#ffffffaa;text-decoration:line-through;margin-bottom:18px}
 .alt{position:absolute;left:0;right:0;bottom:0;padding:18px 56px 26px;font-size:21px;line-height:1.4;color:#ffffffaa}
 .alt b{color:#fff}"""
-    return (f'<style>{css}</style><img class="kapak" src="data:image/png;base64,{b64(u["gorsel"])}"><div class="koyu"></div>'
+    return (f'<style>{css}</style>{zemin(u, "kapak")}<div class="koyu"></div>'
             f'<div class="w" style="position:relative;padding:50px 0 0"><span class="pill bc" style="margin-left:56px">{e(d["market"])}</span>{logo("lg")}</div>'
             f'{rz}{nt}<div class="ad">{e(u["ad"])}</div><div class="fy"><div class="p">${e(u["fiyat"])}</div>{es}</div>'
             f'<div class="alt"><b>Kaynak:</b> {e(d["kaynak_url"])} · <b>Kontrol:</b> {e(d["kontrol_tarihi"])}<br>'
@@ -87,18 +106,18 @@ def tekli_govde(u, sayfa_no=None, toplam=None):
 # ------------------------------------------------------------------ toplu (4'te 1)
 def kart(u):
     rz = f'<div class="krz bc">%{e(u["indirim"])}</div>' if u.get("indirim") else ""
-    return (f'<div class="kart"><img class="kg" src="data:image/png;base64,{b64(u["gorsel"])}"><div class="kkoyu"></div>{rz}'
+    return (f'<div class="kart">{zemin(u, "kg", True)}<div class="kkoyu"></div>{rz}'
             f'<div class="kad">{e(u["ad"])}</div><div class="kp bc">${e(u["fiyat"])}</div></div>')
 
 
 def toplu_kapak_govde(en_yuksek, sayfa_no, toplam):
     dots = "".join(f'<i class="{"on" if i == sayfa_no else ""}"></i>' for i in range(1, toplam + 1))
     css = """
-.kapak{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(3px) brightness(.55)}
-.koyu{position:absolute;inset:0;background:linear-gradient(180deg,#00000088 0%,#00000055 40%,#000000cc 100%)}
+.kapak{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(2px) brightness(.8)}
+.koyu{position:absolute;inset:0;background:linear-gradient(180deg,#00000077 0%,#00000033 45%,#000000bb 100%)}
 .et{position:absolute;left:56px;top:170px;right:56px;font-size:58px;font-weight:800;color:""" + HI + """;letter-spacing:2px}
 .hero{position:absolute;left:56px;right:56px;top:250px;font-family:'Barlow Condensed';font-weight:800;font-size:150px;line-height:.92;text-shadow:0 8px 30px #000}
-.hero span{color:""" + AC + """}
+.hero span{color:""" + AC + """;margin-right:18px}
 .say{position:absolute;left:56px;bottom:260px;font-size:40px;font-weight:600}
 .say b{font-size:110px;font-family:'Barlow Condensed';color:""" + AC + """;vertical-align:-12px;margin-right:10px}"""
     return (f'<style>{css}</style><img class="kapak" src="data:image/png;base64,{b64(en_yuksek["gorsel"])}"><div class="koyu"></div>'
