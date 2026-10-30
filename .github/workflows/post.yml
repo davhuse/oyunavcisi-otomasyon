@@ -76,3 +76,17 @@ jobs:
           [ -f gecmis.json ] && git add gecmis.json || true
           [ -f paylasilan.json ] && git add paylasilan.json || true
           git diff --cached --quiet || { git commit -qm "gecmis guncellendi" && git pull -q --rebase && git push -q; }
+
+      # Dış tetikleyici yok: her çalışma bitince 15 dk sonrasına kendini yeniden kurar. Başka çalışma sürüyorsa zinciri çoğaltmaz.
+      - name: Sonraki çalışmayı kur (15 dk sonra)
+        if: ${{ always() && !inputs.deneme }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 840
+          diger=0
+          for s in queued in_progress; do
+            n=$(gh run list -w post.yml -s $s -L 30 --json databaseId --jq "[.[]|select(.databaseId != ${{ github.run_id }})]|length")
+            diger=$((diger + n))
+          done
+          if [ "$diger" = "0" ]; then gh api repos/${{ github.repository }}/dispatches -f event_type=zamanla; else echo "başka çalışma var ($diger), zincir çoğaltılmadı"; fi
