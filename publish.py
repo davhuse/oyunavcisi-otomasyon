@@ -33,6 +33,18 @@ def url_bekle(url):
     sys.exit(f"Görsel herkese açık değil: {url}")
 
 
+def yayinla(creation_id):
+    """Container FINISHED dese bile media_publish bazen anlık 'Media Not Found' (code 24) verebiliyor; birkaç kez dener."""
+    for deneme in range(4):
+        r = requests.post(f"{HOST}/{UID}/media_publish", data={"creation_id": creation_id, "access_token": TOKEN}, timeout=60)
+        if r.ok:
+            return r.json()["id"]
+        if deneme < 3 and r.json().get("error", {}).get("code") == 24:
+            time.sleep(8)
+            continue
+        sys.exit(f"Instagram hatası (media_publish): {r.text}")
+
+
 post = json.load(open("out/post.json", encoding="utf-8"))
 if len(post["gorseller"]) == 1:  # tek oyun = tek görsel; Instagram CAROUSEL en az 2 görsel ister
     url = f"{BASE}/{post['gorseller'][0]}"
@@ -48,7 +60,7 @@ else:
         hazir_bekle(c)
     kap = api(f"{UID}/media", media_type="CAROUSEL", children=",".join(cocuklar), caption=post["caption"])["id"]
 hazir_bekle(kap)
-medya = api(f"{UID}/media_publish", creation_id=kap)["id"]
+medya = yayinla(kap)
 print("Paylaşıldı, medya id:", medya)
 
 gecmis = json.load(open("gecmis.json", encoding="utf-8")) if os.path.exists("gecmis.json") else []
@@ -66,6 +78,6 @@ try:
     url_bekle(url)
     h = api(f"{UID}/media", image_url=url, media_type="STORIES")["id"]
     hazir_bekle(h)
-    print("Hikaye paylaşıldı:", api(f"{UID}/media_publish", creation_id=h)["id"])
+    print("Hikaye paylaşıldı:", yayinla(h))
 except (SystemExit, Exception) as e:
     print("UYARI: hikaye paylaşılamadı:", e)
