@@ -1,12 +1,11 @@
-"""Sıradaki kaynağı (steam/epic) ve henüz paylaşılmamış oyunları seçer, görselleri ve caption'ı üretir -> out/post.json
-Kaynak: en uzun süredir paylaşılmayan ve en az 4 'taze' oyunu olan. Taze: son TAZE_GUN günde paylaşılmamış ya da fiyatı değişmiş.
-Oyun/fiyat yalnızca topla.py'nin Steam/Epic API'sinden doğruladığı veriden gelir."""
+"""Steam+Epic'teki tüm sağlam indirimli/taze oyunları birleştirir, en yüksek indirimli olanı seçip tek oyunluk
+gönderi + hikaye üretir -> out/post.json. Günlük paylaşım sayısı GUNLUK_LIMIT'i (gate.py) geçemez.
+Taze: son TAZE_GUN günde bu oyun paylaşılmamış ya da fiyatı değişmiş. Oyun/fiyat yalnızca topla.py'nin doğruladığı veriden gelir."""
 import json, os, shutil, subprocess, sys, time
 from datetime import date, datetime, timedelta, timezone
 
 KAYNAKLAR = ["steam", "epic"]
 ETIKET = {"steam": "#steam #steamsale #pcgaming", "epic": "#epicgames #epicgamesstore #ücretsizoyun"}
-OYUN_SAYISI = 8
 TAZE_GUN = 5
 TR = timezone(timedelta(hours=3))
 
@@ -31,20 +30,13 @@ def taze(k, u, bugun):
     return fiyat != u["fiyat"] or (bugun - date.fromisoformat(gun)).days >= TAZE_GUN
 
 
-def son(k):
-    t = [g["tarih"] for g in gecmis if g["kaynak"] == k]
-    return t[-1] if t else ""
-
-
-def caption(d, k):
-    satir = [f'{d["market"]} · {d["baslik"]} ({d["gecerlilik"]})', ""]
-    for u in d["urunler"][:4]:
-        eski = f' (eski ${u["eski_fiyat"]}, %{u["indirim"]} indirim)' if u.get("indirim") else ""
-        satir.append(f'• {u["ad"]}: ${u["fiyat"]}{eski}')
-    if len(d["urunler"]) > 4:
-        satir.append(f'…ve {len(d["urunler"]) - 4} oyun daha, kaydır.')
-    satir += ["", f'Kontrol: {d["kontrol_tarihi"]}. Fiyatlar değişebilir, kampanyalar önceden haber vermeden bitebilir.',
-              f'Kaynak: {d["kaynak_url"]}', "", f'#indirim #oyunindirimi #oyunavcisi {ETIKET[k]}']
+def caption(k, baslik, u):
+    eski = f' (eski ${u["eski_fiyat"]}, %{u["indirim"]} indirim)' if u.get("indirim") else ""
+    satir = [f'{baslik["market"]} · {u["ad"]}', "", f'${u["fiyat"]}{eski}']
+    if u.get("not"):
+        satir.append(u["not"])
+    satir += ["", f'🔗 {u["link"]}', "", f'Kontrol: {baslik["kontrol_tarihi"]}. Fiyatlar değişebilir, kampanyalar önceden haber vermeden bitebilir.',
+              f'Kaynak: {baslik["kaynak_url"]}', "", f'#indirim #oyunindirimi #oyunavcisi {ETIKET[k]}']
     return "\n".join(satir)
 
 
@@ -59,34 +51,31 @@ if __name__ == "__main__":
         cikis("false")
         sys.exit("Steam/Epic'ten veri alınamadı: API değişmiş ya da erişim engellenmiş olabilir")
     bugun = datetime.now(TR).date()
-    devam = "false"
-    for k in sorted(KAYNAKLAR, key=son):
+    aday = []  # (indirim, kaynak, başlık_bilgisi, oyun)
+    for k in KAYNAKLAR:
         if not os.path.exists(f"veri/{k}.json"):
             continue
         d = json.load(open(f"veri/{k}.json", encoding="utf-8"))
-        secilen = [u for u in d["urunler"] if taze(k, u, bugun)][:OYUN_SAYISI]
-        if len(secilen) < 1:  # Epic'te günde tek ücretsiz oyun olabilir; 1 bile yeni içerikse paylaş
-            print(f"{k}: yeni oyun yok, atlandı")
-            continue
-        d["urunler"] = secilen
-        json.dump(d, open(f"veri/{k}_post.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-        subprocess.run([sys.executable, "render.py", f"veri/{k}_post.json"], check=True)
-        damga = time.strftime("%Y%m%d%H%M")
-        shutil.rmtree("out/yayin", ignore_errors=True)
-        os.makedirs("out/yayin")
-        ad = sorted(f for f in os.listdir(f"out/{k}_post") if f.endswith(".jpg") and f != "hikaye.jpg")
-        gorseller = []
-        for i, f in enumerate(ad, 1):
-            shutil.copy(f"out/{k}_post/{f}", f"out/yayin/{damga}_{k}_{i}.jpg")
-            gorseller.append(f"{damga}_{k}_{i}.jpg")
-        hikaye = f"{damga}_{k}_hikaye.jpg"
-        shutil.copy(f"out/{k}_post/hikaye.jpg", f"out/yayin/{hikaye}")
-        json.dump({"kaynak": k, "gorseller": gorseller, "hikaye": hikaye, "caption": caption(d, k),
-                   "urunler": [[anahtar(k, u), u["fiyat"]] for u in secilen]},
-                  open("out/post.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-        print(f"Seçilen kaynak: {k}, {len(secilen)} oyun, {len(gorseller)} görsel")
-        devam = "true"
-        break
-    else:
-        print("Paylaşılacak yeni içerik yok")
-    cikis(devam)
+        for u in d["urunler"]:
+            if taze(k, u, bugun):
+                aday.append((int(u.get("indirim") or 0), k, d, u))
+    if not aday:
+        print("Paylaşılacak yeni/taze oyun yok")
+        cikis("false")
+        sys.exit(0)
+    aday.sort(key=lambda a: -a[0])  # en yüksek indirim önce
+    _, k, d, u = aday[0]
+    d2 = {**d, "urunler": [u]}
+    json.dump(d2, open(f"veri/{k}_post.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    subprocess.run([sys.executable, "render.py", f"veri/{k}_post.json"], check=True)
+    damga = time.strftime("%Y%m%d%H%M")
+    shutil.rmtree("out/yayin", ignore_errors=True)
+    os.makedirs("out/yayin")
+    shutil.copy(f"out/{k}_post/1.jpg", f"out/yayin/{damga}_{k}_1.jpg")
+    hikaye = f"{damga}_{k}_hikaye.jpg"
+    shutil.copy(f"out/{k}_post/hikaye.jpg", f"out/yayin/{hikaye}")
+    json.dump({"kaynak": k, "gorseller": [f"{damga}_{k}_1.jpg"], "hikaye": hikaye, "caption": caption(k, d, u),
+               "urunler": [[anahtar(k, u), u["fiyat"]]]},
+              open("out/post.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    print(f"Seçilen: {k} · {u['ad']} (%{u.get('indirim', 0)} indirim)")
+    cikis("true")

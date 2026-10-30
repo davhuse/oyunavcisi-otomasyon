@@ -6,6 +6,7 @@ import requests
 
 H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36"}
 YETISKIN_DESC = {3, 4}
+MIN_INDIRIM = 30  # bundan düşük indirimler "sağlam" sayılmaz, paylaşılmaz (ücretsiz oyun %100 sayıldığı için her zaman geçer)
 N = 12
 
 
@@ -87,7 +88,7 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"{k}: HATA {e}")
             continue
-        iyi = [o for o in ham if o["dogrulandi"]][:N]
+        iyi = [o for o in ham if o["dogrulandi"] and int(o.get("indirim") or 0) >= MIN_INDIRIM][:N]
         os.makedirs(f"gorseller/{k}", exist_ok=True)
         for i, o in enumerate(iyi, 1):
             try:
