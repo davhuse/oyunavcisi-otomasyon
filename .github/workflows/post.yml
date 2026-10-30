@@ -2,7 +2,7 @@ name: Oyun Firsati Paylas
 
 on:
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "7,22,37,52 * * * *"  # saatte 4 kez; dış tetik (cron-job.org) yok, sadece GitHub'ın kendi zamanlayıcısı
   repository_dispatch:
     types: [zamanla]
   workflow_dispatch:
