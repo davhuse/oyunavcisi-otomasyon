@@ -73,5 +73,6 @@ jobs:
         if: ${{ always() && steps.uret.outputs.devam == 'true' && !inputs.deneme && vars.YAYIN == 'acik' }}
         run: |
           git config user.name bot && git config user.email bot@users.noreply.github.com
-          git add gecmis.json; [ -f paylasilan.json ] && git add paylasilan.json || true
+          [ -f gecmis.json ] && git add gecmis.json || true
+          [ -f paylasilan.json ] && git add paylasilan.json || true
           git diff --cached --quiet || { git commit -qm "gecmis guncellendi" && git pull -q --rebase && git push -q; }

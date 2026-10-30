@@ -34,14 +34,19 @@ def url_bekle(url):
 
 
 post = json.load(open("out/post.json", encoding="utf-8"))
-cocuklar = []
-for ad in post["gorseller"]:
-    url = f"{BASE}/{ad}"
+if len(post["gorseller"]) == 1:  # tek oyun = tek görsel; Instagram CAROUSEL en az 2 görsel ister
+    url = f"{BASE}/{post['gorseller'][0]}"
     url_bekle(url)
-    cocuklar.append(api(f"{UID}/media", image_url=url, is_carousel_item="true")["id"])
-for c in cocuklar:
-    hazir_bekle(c)
-kap = api(f"{UID}/media", media_type="CAROUSEL", children=",".join(cocuklar), caption=post["caption"])["id"]
+    kap = api(f"{UID}/media", image_url=url, caption=post["caption"])["id"]
+else:
+    cocuklar = []
+    for ad in post["gorseller"]:
+        url = f"{BASE}/{ad}"
+        url_bekle(url)
+        cocuklar.append(api(f"{UID}/media", image_url=url, is_carousel_item="true")["id"])
+    for c in cocuklar:
+        hazir_bekle(c)
+    kap = api(f"{UID}/media", media_type="CAROUSEL", children=",".join(cocuklar), caption=post["caption"])["id"]
 hazir_bekle(kap)
 medya = api(f"{UID}/media_publish", creation_id=kap)["id"]
 print("Paylaşıldı, medya id:", medya)
