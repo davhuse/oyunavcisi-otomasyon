@@ -1,0 +1,77 @@
+name: Oyun Firsati Paylas
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  repository_dispatch:
+    types: [zamanla]
+  workflow_dispatch:
+    inputs:
+      deneme:
+        description: "Sadece üret, Instagram'da paylaşma"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: paylas
+  cancel-in-progress: false
+
+jobs:
+  paylas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Paylaşım zamanı geldi mi?
+        id: kapi
+        run: python3 gate.py
+
+      - uses: actions/setup-python@v5
+        if: steps.kapi.outputs.devam == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+      - if: steps.kapi.outputs.devam == 'true'
+        run: pip install -r requirements.txt && playwright install --with-deps chromium
+
+      - name: Topla, doğrula, görselleri üret
+        id: uret
+        if: steps.kapi.outputs.devam == 'true'
+        run: python gonderi.py
+
+      - name: Görselleri indirilebilir yap (inceleme için)
+        if: steps.uret.outputs.devam == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gonderi
+          path: |
+            out/yayin
+            out/post.json
+
+      - name: Görselleri herkese açık dala yükle
+        if: ${{ steps.uret.outputs.devam == 'true' && !inputs.deneme && vars.YAYIN == 'acik' }}
+        run: |
+          mkdir /tmp/yayin && cp out/yayin/*.jpg /tmp/yayin && cd /tmp/yayin
+          git init -q -b gecici
+          git -c user.name=bot -c user.email=bot@users.noreply.github.com add .
+          git -c user.name=bot -c user.email=bot@users.noreply.github.com commit -qm gorseller
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gecici
+
+      - name: Instagram'da paylaş
+        if: ${{ steps.uret.outputs.devam == 'true' && !inputs.deneme && vars.YAYIN == 'acik' }}
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IMG_BASE: https://raw.githubusercontent.com/${{ github.repository }}/gecici
+        run: python publish.py
+
+      - name: Geçmişi kaydet
+        if: ${{ always() && steps.uret.outputs.devam == 'true' && !inputs.deneme && vars.YAYIN == 'acik' }}
+        run: |
+          git config user.name bot && git config user.email bot@users.noreply.github.com
+          git add gecmis.json; [ -f paylasilan.json ] && git add paylasilan.json || true
+          git diff --cached --quiet || { git commit -qm "gecmis guncellendi" && git pull -q --rebase && git push -q; }
