@@ -76,7 +76,7 @@ def epic():
         if not teklif or fiyat.get("discountPrice", -1) != 0:  # yalnızca şu an gerçekten 0 TL olanlar
             continue
         eski = fiyat.get("originalPrice", 0) / 100
-        gorsel = [im["url"] for tip in ("OfferImageTall", "OfferImageWide", "Thumbnail") for im in e.get("keyImages", []) if im.get("type") == tip]
+        gorsel = [im["url"] for tip in ("OfferImageWide", "OfferImageTall", "Thumbnail") for im in e.get("keyImages", []) if im.get("type") == tip]
         slug = (e.get("catalogNs", {}).get("mappings") or [{}])[0].get("pageSlug") or e.get("urlSlug") or e.get("productSlug", "")
         link = f"https://store.epicgames.com/tr/p/{slug}" if slug else ""
         if not link:
