@@ -1,4 +1,4 @@
-"""Steam özel indirimler + Epic ücretsiz oyunlar -> veri/<kaynak>.json. Fiyatlar Steam/Epic API'sinden, uydurulmaz.
+﻿"""Steam özel indirimler + Epic ücretsiz oyunlar -> veri/<kaynak>.json. Fiyatlar Steam/Epic API'sinden, uydurulmaz.
 Yetişkin/cinsel içerikli oyunlar elenir: Steam content_descriptors 3 (Adult Only Sexual Content) veya 4 (Frequent Nudity/Sexual Content)
 içeren ya da required_age>=18 olan oyunlar atılır (bkz. https://partner.steamgames.com/doc/store/application/depots#content_descriptors)."""
 import html, json, os, re, sys, time
@@ -7,7 +7,7 @@ import requests
 H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36"}
 YETISKIN_DESC = {3, 4}
 MIN_INDIRIM = 30  # bundan düşük indirimler "sağlam" sayılmaz, paylaşılmaz (ücretsiz oyun %100 sayıldığı için her zaman geçer)
-N = 12
+N = 25
 
 
 def al(url, **k):
@@ -38,9 +38,19 @@ def oyun(ad, fiyat, eski, gorsel, link, not_=""):
 
 def steam():
     j = al("https://store.steampowered.com/api/featuredcategories?cc=tr&l=turkish").json()
+    ids = [it["id"] for it in j.get("specials", {}).get("items", [])]
+    for bas in (0, 100):  # öne çıkan liste yalnızca ~10 oyun; indirimli aramadan havuzu genişlet (id logo adresinde)
+        try:
+            for it in al("https://store.steampowered.com/search/results/", params={"specials": 1, "json": 1, "cc": "tr", "l": "turkish", "count": 100, "start": bas}).json()["items"]:
+                m = re.search(r"/apps/(\d+)/", it.get("logo", ""))
+                if m and int(m.group(1)) not in ids:
+                    ids.append(int(m.group(1)))
+        except Exception:
+            pass  # arama çalışmazsa öne çıkan listeyle devam
     out = []
-    for it in j.get("specials", {}).get("items", [])[:25]:
-        i = it["id"]
+    for i in ids[:150]:
+        if sum(1 for o in out if o["dogrulandi"] and int(o["indirim"] or 0) >= MIN_INDIRIM) >= N:
+            break
         try:
             r = al("https://store.steampowered.com/api/appdetails", params={"appids": i, "cc": "tr", "l": "turkish"}).json()
             d = r.get(str(i), {}).get("data")
