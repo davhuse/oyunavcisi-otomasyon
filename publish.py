@@ -46,6 +46,18 @@ def yayinla(creation_id):
 
 
 post = json.load(open("out/post.json", encoding="utf-8"))
+
+def kaydet(medya, anahtar, deger):
+    """Yayından ÖNCE çağrılır: Instagram hata dönse de gönderi bazen yayınlanıyor; kayıt yoksa 15 dk sonra aynısı tekrar atılıyordu."""
+    gecmis = json.load(open("gecmis.json", encoding="utf-8")) if os.path.exists("gecmis.json") else []
+    gecmis.append({"tarih": time.strftime("%Y-%m-%d %H:%M", time.gmtime()), anahtar: deger, "medya": medya})
+    json.dump(gecmis, open("gecmis.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    paylasilan = json.load(open("paylasilan.json", encoding="utf-8")) if os.path.exists("paylasilan.json") else {}
+    bugun = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 3 * 3600))  # Türkiye günü
+    for k, fiyat in post["urunler"]:
+        paylasilan[k] = f"{bugun}|{fiyat}"
+    json.dump(paylasilan, open("paylasilan.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
 if len(post["gorseller"]) == 1:  # tek oyun = tek görsel; Instagram CAROUSEL en az 2 görsel ister
     url = f"{BASE}/{post['gorseller'][0]}"
     url_bekle(url)
@@ -60,17 +72,9 @@ else:
         hazir_bekle(c)
     kap = api(f"{UID}/media", media_type="CAROUSEL", children=",".join(cocuklar), caption=post["caption"])["id"]
 hazir_bekle(kap)
+kaydet("denendi:" + kap, "kaynak", post["kaynak"])
 medya = yayinla(kap)
 print("Paylaşıldı, medya id:", medya)
-
-gecmis = json.load(open("gecmis.json", encoding="utf-8")) if os.path.exists("gecmis.json") else []
-gecmis.append({"tarih": time.strftime("%Y-%m-%d %H:%M", time.gmtime()), "kaynak": post["kaynak"], "medya": medya})
-json.dump(gecmis, open("gecmis.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-paylasilan = json.load(open("paylasilan.json", encoding="utf-8")) if os.path.exists("paylasilan.json") else {}
-bugun = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 3 * 3600))  # Türkiye günü
-for k, fiyat in post["urunler"]:
-    paylasilan[k] = f"{bugun}|{fiyat}"
-json.dump(paylasilan, open("paylasilan.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 # hikaye: gönderi kaydedildikten sonra; başarısız olursa gönderiyi bozmaz
 try:
